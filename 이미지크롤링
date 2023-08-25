@@ -1,0 +1,70 @@
+import csv
+import os
+import requests
+from bs4 import BeautifulSoup
+import re
+
+# CSV 파일 경로
+csv_file_path = "/Users/minseojeong/Downloads/재료목록.csv"  
+target_column_index = 1  
+
+data_list = []
+
+with open(csv_file_path, "r", newline="", encoding="utf-8") as csv_file:
+    csv_reader = csv.reader(csv_file)
+    
+    for row in csv_reader:
+        if len(row) > target_column_index:
+            data_list.append(row[target_column_index])
+#print(data_list)
+
+# 검색어 리스트
+search_terms = data_list
+
+# 대상 URL 포맷
+url_format = "https://www.google.com/search?q={}&tbm=isch"
+
+# 이미지를 저장할 폴더 생성
+folder_name = "재료이미지"
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+# 각 검색어에 대해 이미지 검색 및 다운로드
+for term in search_terms:
+    search_url = url_format.format(term)
+    response = requests.get(search_url)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    image_links = soup.find_all("img")  
+
+    downloaded = False  
+    
+    for img in image_links:
+        image_url = img.get("src")
+
+        if image_url and not image_url.startswith("data:"):
+            # 이미지 링크가 있는 경우와 "data:"로 시작하지 않는 경우에만 다운로드
+            if not image_url.startswith("http"):
+                image_url = search_url + image_url
+            image_data = requests.get(image_url).content
+            image_extension_match = re.search(r"/([a-zA-Z0-9_.-]+)$", image_url)
+            if image_extension_match:
+                image_extension = image_extension_match.group(1)
+            else:
+                image_extension = "jpg"  # 확장자를 찾지 못한 경우 기본값으로 jpg 설정
+            
+            # jpg 파일이면 다운로드
+            if image_extension.lower() == "jpg":
+                image_filename = f"{folder_name}/{term}_image.{image_extension}"
+
+                with open(image_filename, "wb") as image_file:
+                    image_file.write(image_data)
+
+                print(f"{term.capitalize()} image saved as {image_filename}")
+                downloaded = True
+                break  # 이미지를 다운로드했으므로 루프 종료
+        
+    if not downloaded:
+        print(f"No suitable images found for {term.capitalize()}.")
+
+print("Image download complete.")
